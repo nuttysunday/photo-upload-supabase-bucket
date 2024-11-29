@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { createClient } from '@supabase/supabase-js';
+import heic2any from 'heic2any';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -39,15 +40,23 @@ export async function POST(request) {
   }
 
   try {
-    // Convert the file to a buffer
-    const arrayBuffer = await file.arrayBuffer();  // Convert to ArrayBuffer
-    const buffer = Buffer.from(arrayBuffer);        // Convert ArrayBuffer to Buffer
+    let buffer;
 
-    // Upload the file using PutObjectCommand with the buffer
+    if (file.name.toLowerCase().endsWith('.heic')) {
+      const arrayBuffer = await file.arrayBuffer();
+      const heicBlob = new Blob([arrayBuffer]);
+      const convertedImage = await heic2any({ blob: heicBlob, toType: 'image/jpeg' });
+
+      buffer = Buffer.from(await convertedImage.arrayBuffer());
+    } else {
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    }
+
     const command = new PutObjectCommand({
       Bucket: "photographs",
       Key: `uploads/${file.name}`,
-      Body: buffer,  // Use Buffer for the Body
+      Body: buffer,
       ContentType: file.type,
     });
 
