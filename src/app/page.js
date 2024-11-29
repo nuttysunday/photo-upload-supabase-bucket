@@ -1,101 +1,112 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState } from "react";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+
+const client = new S3Client({
+  forcePathStyle: true,
+  region: "us-west-1",
+  endpoint: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL,
+  credentials: {
+    accessKeyId: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_ACCESS_KEY_ID,
+    secretAccessKey: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_SECRET_ACCESS_KEY,
+  },
+});
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [file, setFile] = useState(null);
+  const [caption, setCaption] = useState("");
+  const [location, setLocation] = useState("");
+  const [date, setDate] = useState("");
+  const [message, setMessage] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const handleUpload = async () => {
+    if (!file) {
+      setMessage("Please select a file first!");
+      return;
+    }
+
+    try {
+      // Prepare the upload command
+      const command = new PutObjectCommand({
+        Bucket: "photographs",
+        Key: `uploads/${file.name}`,
+        Body: file,
+        ContentType: file.type,
+      });
+
+      // Execute the upload
+      await client.send(command);
+// 
+
+      // Construct the file URL
+      const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photographs/uploads/${file.name}`;
+
+      // Store metadata in the Supabase database
+      const { data, error } = await supabase
+        .from('photos')
+        .insert([
+          {
+            filename: file.name,
+            caption,
+            location,
+            date: date || new Date().toISOString(),
+            file_url: fileUrl,
+          },
+        ]);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setMessage("File uploaded and metadata saved successfully!");
+    } catch (error) {
+      setMessage(`Upload failed: ${error.message}`);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6">
+      <h1 className="text-2xl font-semibold text-gray-800 mb-4">Upload Your Photo</h1>
+      <input
+        type="file"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        className="border-2 border-gray-300 rounded-md p-2 mb-4 w-full max-w-md"
+      />
+      <input
+        type="text"
+        placeholder="Enter caption"
+        value={caption}
+        onChange={(e) => setCaption(e.target.value)}
+        className="border-2 border-gray-300 rounded-md p-2 mb-4 w-full max-w-md"
+      />
+      <input
+        type="text"
+        placeholder="Enter location"
+        value={location}
+        onChange={(e) => setLocation(e.target.value)}
+        className="border-2 border-gray-300 rounded-md p-2 mb-4 w-full max-w-md"
+      />
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="border-2 border-gray-300 rounded-md p-2 mb-4 w-full max-w-md"
+      />
+      <button
+        onClick={handleUpload}
+        className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
+      >
+        Upload
+      </button>
+      {message && <p className="mt-4 text-red-500">{message}</p>}
     </div>
   );
 }
