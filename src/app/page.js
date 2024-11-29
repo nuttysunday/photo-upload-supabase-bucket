@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import heic2any from "heic2any";
 
 export default function Home() {
   const [file, setFile] = useState(null);
@@ -16,23 +17,39 @@ export default function Home() {
       return;
     }
 
+    // If the file is HEIC, convert it to JPEG
+    let fileToUpload = file;
+    if (file.name.toLowerCase().endsWith(".heic")) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const heicBlob = new Blob([arrayBuffer]);
+        const convertedImage = await heic2any({ blob: heicBlob, toType: "image/jpeg" });
+
+        fileToUpload = new File([convertedImage], file.name.replace(".heic", ".jpg"), {
+          type: "image/jpeg",
+        });
+      } catch (error) {
+        setMessage(`HEIC conversion failed: ${error.message}`);
+        return;
+      }
+    }
+
     // Prepare the form data
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('caption', caption);
-    formData.append('location', location);
-    formData.append('date', date || new Date().toISOString());
-    formData.append('secret', secret);
+    formData.append("file", fileToUpload);
+    formData.append("caption", caption);
+    formData.append("location", location);
+    formData.append("date", date || new Date().toISOString());
+    formData.append("secret", secret);
 
     try {
-      const response = await fetch('/api/', {
-        method: 'POST',
+      const response = await fetch("/api/", {
+        method: "POST",
         body: formData,
       });
-      console.log("Shivam")
-      console.log(response)
+
       const data = await response.json();
-  
+
       if (response.ok) {
         setMessage(data.message);
       } else {
