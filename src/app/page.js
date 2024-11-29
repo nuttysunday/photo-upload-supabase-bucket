@@ -1,24 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-
-const client = new S3Client({
-  forcePathStyle: true,
-  region: "us-west-1",
-  endpoint: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL,
-  credentials: {
-    accessKeyId: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_ACCESS_KEY_ID,
-    secretAccessKey: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_SECRET_ACCESS_KEY,
-  },
-});
 
 export default function Home() {
   const [file, setFile] = useState(null);
@@ -26,6 +8,7 @@ export default function Home() {
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
   const [message, setMessage] = useState("");
+  const [secret, setSecret] = useState("");
 
   const handleUpload = async () => {
     if (!file) {
@@ -33,40 +16,28 @@ export default function Home() {
       return;
     }
 
+    // Prepare the form data
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('caption', caption);
+    formData.append('location', location);
+    formData.append('date', date || new Date().toISOString());
+    formData.append('secret', secret);
+
     try {
-      // Prepare the upload command
-      const command = new PutObjectCommand({
-        Bucket: "photographs",
-        Key: `uploads/${file.name}`,
-        Body: file,
-        ContentType: file.type,
+      const response = await fetch('/api/', {
+        method: 'POST',
+        body: formData,
       });
-
-      // Execute the upload
-      await client.send(command);
-// 
-
-      // Construct the file URL
-      const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photographs/uploads/${file.name}`;
-
-      // Store metadata in the Supabase database
-      const { data, error } = await supabase
-        .from('photos')
-        .insert([
-          {
-            filename: file.name,
-            caption,
-            location,
-            date: date || new Date().toISOString(),
-            file_url: fileUrl,
-          },
-        ]);
-
-      if (error) {
-        throw new Error(error.message);
+      console.log("Shivam")
+      console.log(response)
+      const data = await response.json();
+  
+      if (response.ok) {
+        setMessage(data.message);
+      } else {
+        setMessage(data.message);
       }
-
-      setMessage("File uploaded and metadata saved successfully!");
     } catch (error) {
       setMessage(`Upload failed: ${error.message}`);
     }
@@ -98,6 +69,13 @@ export default function Home() {
         type="date"
         value={date}
         onChange={(e) => setDate(e.target.value)}
+        className="border-2 border-gray-300 rounded-md p-2 mb-4 w-full max-w-md"
+      />
+      <input
+        type="text"
+        placeholder="Enter secret key"
+        value={secret}
+        onChange={(e) => setSecret(e.target.value)}
         className="border-2 border-gray-300 rounded-md p-2 mb-4 w-full max-w-md"
       />
       <button
